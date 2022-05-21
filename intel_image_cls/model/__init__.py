@@ -1,5 +1,7 @@
+from typing import Tuple
 import torch
 from torch import nn
+from torchvision import transforms as T
 
 
 KLS = [
@@ -36,6 +38,26 @@ class InceptionBlock(nn.Module):
         return torch.cat(Y,1)
 
 
+from torchvision.transforms import functional as F
+from PIL.Image import Image
+class Padding(object):
+    
+    def __init__(self, size: Tuple):
+        super(Padding).__init__()
+        self.size = size
+
+    def __call__(self, X: Image):
+        ## torch compatible image fromat assumed (N,C,H,W)
+        h, w = self.size
+        iw, ih = X.size
+        if ih == h and iw == w:
+            return X
+        else:
+            tp = (h - ih) // 2
+            bp = h - tp - ih
+            lp = (w - iw) // 2
+            rp = w - lp - iw
+            return F.pad(X, [lp, tp, rp, bp])
 
 class DenseInception_V0(nn.Sequential):
     

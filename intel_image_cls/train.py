@@ -8,6 +8,7 @@ from torchvision import transforms as T
 import wandb
 from tqdm import tqdm
 import model
+from model import Padding
 
 PRJ_NAME = 'intel_image_cls'
 
@@ -89,7 +90,8 @@ def try_gpu():
 
 def main(args):
     
-
+    # set random seed for reproducibility 
+    torch.manual_seed(10)
     wandb.init(project=PRJ_NAME, entity="dwidlee")
     config = wandb.config
     print(config)
@@ -100,12 +102,24 @@ def main(args):
     if 'epochs' not in config:
         config['epochs'] = args.epochs
     if 'batch' not in config:
-        config['batch'] = args.b
+        config['batch'] = args.batch
     
     print(config)
 
-    validate_set = datasets.ImageFolder(root='data/seg_test', transform=T.Compose([T.ToTensor(), Padding((150, 150))]))
-    train_set = datasets.ImageFolder(root='data/seg_train', transform=T.Compose([T.ToTensor(), Padding((150, 150))]))
+    train_preprocess = torch.jit.script_if_tracing(T.Compose([
+        Padding((150, 150)),
+        T.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.9,1.1)),
+        T.RandomHorizontalFlip(),
+        T.ToTensor()
+    ]))
+
+    val_preprocess = torch.jit.script_if_tracing(T.Compose([
+        Padding((150, 150)),
+        T.ToTensor()
+    ]))
+
+    validate_set = datasets.ImageFolder(root='data/seg_test', transform=val_preprocess)
+    train_set = datasets.ImageFolder(root='data/seg_train', transform=train_preprocess)
     train_data = data.DataLoader(train_set, batch_size=config['batch'], shuffle=True, num_workers=5)
     val_data = data.DataLoader(validate_set, batch_size=config['batch'], shuffle=True, num_workers=5)
 
@@ -113,30 +127,11 @@ def main(args):
     
 
 
-class Padding(object):
-    
-    def __init__(self, size: Tuple):
-        super(Padding).__init__()
-        self.size = size
-
-    def __call__(self, X: torch.Tensor):
-        ## torch compatible image fromat assumed (N,C,H,W)
-        h, w = self.size
-        if X.shape[1] == h and X.shape[2] == w:
-            return X
-        else:
-            tp = (h - X.shape[1]) // 2
-            bp = h - tp - X.shape[1]
-            lp = (w - X.shape[2]) // 2
-            rp = w - lp - X.shape[2]
-            return T.Pad((lp, tp, rp, bp))(X)
-        
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="train model")
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.01)
-    parser.add_argument('--b', type=int, default=4)
+    parser.add_argument('--batch', type=int, default=4)
     parser.add_argument('--o', type=str)
     args = parser.parse_args()
 
