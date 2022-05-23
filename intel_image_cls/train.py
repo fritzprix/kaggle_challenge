@@ -9,6 +9,7 @@ import wandb
 from tqdm import tqdm
 import model
 from model import Padding
+from model import Preprocessor
 
 PRJ_NAME = 'intel_image_cls'
 
@@ -29,9 +30,10 @@ def train_epoch(net, train_data, loss, updater, device):
         l = loss(y_hat, y)
         l.mean().backward()
         updater.step()
-        lsum += l.sum().detach()
-        numel += y.numel()
-        acc_sum += accuracy(y_hat, y)
+        with torch.no_grad():
+            lsum += float(l.sum())
+            numel += float(y.numel())
+            acc_sum += float(accuracy(y_hat, y))
 
     return (lsum / numel), (acc_sum / numel)
 
@@ -76,9 +78,10 @@ def evaluate(net, val_data, loss, device):
             X = X.to(device)
             y = y.to(device)
             y_hat = net(X)
-            lsum += loss(y_hat, y).sum()
-            acc_sum += accuracy(y_hat, y)
-            numel += y.numel()
+            lsum += float(loss(y_hat, y).sum())
+            acc_sum += float(accuracy(y_hat, y))
+            numel += float(y.numel())
+    print(f'{lsum} / {acc_sum} / {numel}')
     return (lsum / numel), (acc_sum / numel)
 
 
@@ -105,7 +108,6 @@ def main(args):
         config['batch'] = args.batch
     
     print(config)
-
     train_preprocess = torch.jit.script_if_tracing(T.Compose([
         Padding((150, 150)),
         T.RandomAffine(degrees=(-10,10), translate=(0.1, 0.1), scale=(0.9,1.1)),
@@ -113,10 +115,7 @@ def main(args):
         T.ToTensor()
     ]))
 
-    val_preprocess = torch.jit.script_if_tracing(T.Compose([
-        Padding((150, 150)),
-        T.ToTensor()
-    ]))
+    val_preprocess = torch.jit.script_if_tracing(Preprocessor())
 
     validate_set = datasets.ImageFolder(root='data/seg_test', transform=val_preprocess)
     train_set = datasets.ImageFolder(root='data/seg_train', transform=train_preprocess)

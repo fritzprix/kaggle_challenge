@@ -1,4 +1,6 @@
 from typing import Tuple
+import PIL
+from git import Object
 import torch
 from torch import nn
 from torchvision import transforms as T
@@ -12,6 +14,9 @@ KLS = [
     "sea",
     "street"
 ]
+
+
+
 
 
 class InceptionBlock(nn.Module):
@@ -83,3 +88,6 @@ class DenseInception_V0(nn.Sequential):
                         nn.ReLU(),
                         nn.Linear(512, len(KLS)))
 
+class Preprocessor(T.Compose):
+    def __init__(self):
+        super().__init__([Padding((150, 150)),T.ToTensor()])
