@@ -1,2 +1,4 @@
 data
 wandb
+artifacts
+*.pt
