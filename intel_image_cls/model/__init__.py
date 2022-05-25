@@ -88,6 +88,35 @@ class DenseInception_V0(nn.Sequential):
                         nn.ReLU(),
                         nn.Linear(512, len(KLS)))
 
+
+class DenseInception_V1(nn.Sequential):
+    def __init__(self):
+        super().__init__(InceptionBlock(3, 8, kernels=[5,7]),
+            nn.BatchNorm2d(8 * 4 + 3),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),       ## (n, 35, 75,75)
+            nn.Conv2d(8 * 4 + 3, 8 * 3, kernel_size=1),  ## (n, 16, 75, 75)
+            InceptionBlock(8 * 3, 8 * 3, kernels=[5, 7]),                ## (n, 80, 75, 75)  
+            nn.BatchNorm2d(8 * 3 * 5),                       
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3),       ## (n, 80, 25, 25)
+            nn.Conv2d(8 * 3 * 5, 8 * 2 * 5, kernel_size=1),  ## (n, 40, 25, 25)
+            InceptionBlock(16 * 5, 16 * 5),                ## (n, 200, 25, 25)
+            nn.BatchNorm2d(16 * 5 * 5),                   
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, padding=1),      ## (n, 200, 9, 9)
+            nn.Conv2d(400, 300, kernel_size=1),
+            InceptionBlock(300, 300),
+            nn.BatchNorm2d(300 * 5),
+            nn.ReLU(),
+            nn.AvgPool2d(kernel_size=3),
+            nn.Flatten(),
+            nn.Linear(300 * 5 * 3 * 3, 4096),
+            nn.ReLU(),
+            nn.Linear(4096, 512),
+            nn.ReLU(),
+            nn.Linear(512, len(KLS)))
+
 class Preprocessor(T.Compose):
     def __init__(self):
         super().__init__([Padding((150, 150)),T.ToTensor()])

@@ -28,13 +28,13 @@ def train_epoch(net, train_data, loss, updater, device):
         updater.zero_grad()
         y_hat = net(X)
         l = loss(y_hat, y)
-        l.mean().backward()
+        l.backward()
         updater.step()
         with torch.no_grad():
-            lsum += float(l.sum())
+            lsum += float(l) * y.numel()
             numel += float(y.numel())
             acc_sum += float(accuracy(y_hat, y))
-
+    
     return (lsum / numel), (acc_sum / numel)
 
 def init_weight(m):
@@ -78,9 +78,11 @@ def evaluate(net, val_data, loss, device):
             X = X.to(device)
             y = y.to(device)
             y_hat = net(X)
-            lsum += float(loss(y_hat, y).sum())
+            l = loss(y_hat, y)
+            lsum += float(l) * y.numel()
             acc_sum += float(accuracy(y_hat, y))
             numel += float(y.numel())
+
     print(f'{lsum} / {acc_sum} / {numel}')
     return (lsum / numel), (acc_sum / numel)
 
@@ -122,8 +124,8 @@ def main(args):
     train_data = data.DataLoader(train_set, batch_size=config['batch'], shuffle=True, num_workers=5)
     val_data = data.DataLoader(validate_set, batch_size=config['batch'], shuffle=True, num_workers=5)
 
-    train(model.DenseInception_V0(), train_data, val_data, device, config)
-    
+    train(model.DenseInception_V1(), train_data, val_data, device, config)
+
 
 
 if __name__ == '__main__':
@@ -136,4 +138,4 @@ if __name__ == '__main__':
 
 
     main(args)
-    
+
