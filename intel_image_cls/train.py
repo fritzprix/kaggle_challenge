@@ -50,8 +50,13 @@ def train(net: nn.Module, train_data, val_data, device, config):
         print(f'network : {net.__class__.__name__}')
         
         loss = nn.CrossEntropyLoss()
-        updater = torch.optim.SGD(net.parameters(), lr)
+        updater = None
+        if config['optim'] == 'sgd':
+            updater = torch.optim.SGD(net.parameters(), lr)
+        else:
+            updater = torch.optim.Adam(net.parameters(), lr)
         loss = loss.to(device)
+        max_tacc, max_vacc = 0, 0,
         for epoch in range(num_epochs):
             tloss, tacc = train_epoch(net, train_data, loss, updater, device)
             val_loss, val_acc = evaluate(net, val_data, loss, device)
@@ -63,8 +68,11 @@ def train(net: nn.Module, train_data, val_data, device, config):
             }
             wandb.log(metric)
             print(f'Ep {epoch} : {metric}')
-
-        torch.save(net.state_dict(), f'{net.__class__.__name__}.pt')
+            if max_tacc < tacc and max_vacc < val_acc:
+                print(f'new record : train {max_tacc} => {tacc} / val {max_vacc} => {val_acc}')
+                max_tacc, max_vacc = tacc, val_acc
+                torch.save(net.state_dict(), f'{net.__class__.__name__}.pt')
+            
         trained_model = wandb.Artifact(f'{net.__class__.__name__}', type='model', description=f'{str(net)}')
         trained_model.add_file(f'{net.__class__.__name__}.pt')
         run.log_artifact(trained_model)
@@ -108,6 +116,8 @@ def main(args):
         config['epochs'] = args.epochs
     if 'batch' not in config:
         config['batch'] = args.batch
+    if 'optim' not in config:
+        config['optim'] = args.optim
     
     print(config)
     train_preprocess = torch.jit.script_if_tracing(T.Compose([
@@ -133,6 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--batch', type=int, default=4)
+    parser.add_argument('--optim', type=str, default='sgd')
     parser.add_argument('--o', type=str)
     args = parser.parse_args()
 

@@ -1,9 +1,10 @@
+from email.policy import strict
 from genericpath import exists, isdir
 from pip import main
 import wandb
 import torch
 from model import KLS
-from model import DenseInception_V0
+from model import DenseInception_V0, DenseInception_V1
 from model import Preprocessor
 from torchvision import transforms as T
 import argparse
@@ -51,6 +52,25 @@ def validate(net, device):
         acc += float(accuracy(y_hat, y))
     return (lsum / count), (acc / count)
 
+def download_model(model_version, tag):
+    net = eval(f'DenseInception_{model_version}()')
+    model_artifact_path = f'artifacts/DenseInception_{model_version}:v{tag}/{net.__class__.__name__}.pt'
+    pretrained = None
+    if not exists(model_artifact_path):
+        with wandb.init() as run:
+            model_artifact = run.use_artifact(f'dwidlee/intel_image_cls/DenseInception_{model_version}:v{tag}')
+            model_artifact.download()
+
+    pretrained = torch.load(model_artifact_path)
+    net.load_state_dict(pretrained, strict=False)
+    return net
+
+def load_saved(model_version):
+    net = eval(f'DenseInception_{model_version}()')
+    pretrained = torch.load(f'DenseInception_{model_version}.pt')
+    net.load_state_dict(pretrained, strict=False)
+    return net
+
         
 def main(args):
     
@@ -61,20 +81,16 @@ def main(args):
         validate_model = args.validate
         tag = args.tag
         batch_size = args.batch
-        net = eval(f'DenseInception_{model_version}()')
+        local = args.local
         preprocessor = torch.jit.script_if_tracing(Preprocessor())
         device = torch.device("cuda:0")
 
+        net = None
         # check whether selected model has been downloaded
-        model_artifact_path = f'artifacts/DenseInception_{model_version}:v{tag}/{net.__class__.__name__}.pt'
-        pretrained = None
-        if not exists(model_artifact_path):
-            with wandb.init() as run:
-                model_artifact = run.use_artifact(f'dwidlee/intel_image_cls/DenseInception_{model_version}:v{tag}')
-                model_artifact.download()
-
-        pretrained = torch.load(model_artifact_path)
-        net.load_state_dict(pretrained, strict=False)
+        if local is None:
+            net = download_model(model_version, tag)
+        else:
+            net = load_saved(model_version)
 
         if validate_model:
             val_loss, val_acc = validate(net, device)
@@ -93,13 +109,14 @@ def main(args):
         results_conv = [KLS[result] for result in results]
         with open('submission.csv', 'w+') as csv_file:
             csv_writer = csv.writer(csv_file)
-            csv_writer.writerows([[res] for res in results])
+            csv_writer.writerows([[res, KLS[res]] for res in results])
         print(results_conv[0])
 
 
 
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("--local", type=str, default=None)
     arg_parser.add_argument("--version", type=str, default="V0")
     arg_parser.add_argument("--tag", type=int, default=87)
     arg_parser.add_argument("--input", type=str, default='data/seg_pred')
